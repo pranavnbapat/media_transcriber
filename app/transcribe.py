@@ -42,7 +42,7 @@ def transcribe_whisper(wav_path: Path, model_size: str, language: Optional[str])
     segments, info = model.transcribe(
         str(wav_path),
         language=None,
-        vad_filter=True,
+        vad_filter=False,
         beam_size=1,
         best_of=1,
     )
