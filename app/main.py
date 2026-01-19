@@ -17,6 +17,13 @@ from .download import download_to_tempfile, DownloadError
 from .models import TranscribeRequest, TranscribeResponse, EngineResult
 from .transcribe import transcribe_whisper, get_whisper
 
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 logger = logging.getLogger("media_transcriber")
 
 WHISPER_MIN_CHARS = 20  # treat shorter output as failure
