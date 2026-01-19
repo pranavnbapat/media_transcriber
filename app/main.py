@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.concurrency import run_in_threadpool
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 
 import secrets
 
@@ -33,7 +33,36 @@ WHISPER_MIN_CHARS = 20  # treat shorter output as failure
 
 # ---------------- API key auth ----------------
 API_KEY = os.getenv("API_KEY", "").strip()
+BASIC_USER = os.getenv("BASIC_USER", "").strip()
+BASIC_PASS = os.getenv("BASIC_PASS", "").strip()
+
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+basic_security = HTTPBasic(auto_error=False)
+
+def require_basic_auth(
+    basic: HTTPBasicCredentials | None = Security(basic_security),
+) -> None:
+    """
+    Gate everything (including /docs) behind Basic Auth.
+    """
+    if not (BASIC_USER and BASIC_PASS):
+        raise HTTPException(status_code=500, detail="Server misconfigured: BASIC_USER/BASIC_PASS not set.")
+
+    if not basic:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorised",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    user_ok = secrets.compare_digest(basic.username, BASIC_USER)
+    pass_ok = secrets.compare_digest(basic.password, BASIC_PASS)
+    if not (user_ok and pass_ok):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorised",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 def require_api_key(api_key: str | None = Security(api_key_header)) -> None:
     """
@@ -81,7 +110,7 @@ app = FastAPI(
     docs_url=docs_url,
     openapi_url=openapi_url,
     lifespan=lifespan,
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_basic_auth)],
 )
 
 
