@@ -11,6 +11,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.concurrency import run_in_threadpool
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 
 import secrets
@@ -45,7 +48,9 @@ def require_basic_auth(
     """
     Gate everything (including /docs) behind Basic Auth.
     """
-    if not (BASIC_USER and BASIC_PASS):
+    basic_user = os.getenv("BASIC_USER", "").strip()
+    basic_pass = os.getenv("BASIC_PASS", "").strip()
+    if not (basic_user and basic_pass):
         raise HTTPException(status_code=500, detail="Server misconfigured: BASIC_USER/BASIC_PASS not set.")
 
     if not basic:
@@ -102,8 +107,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-docs_url = None if os.getenv("DISABLE_DOCS", "0") == "1" else "/docs"
-openapi_url = None if os.getenv("DISABLE_DOCS", "0") == "1" else "/openapi.json"
+DISABLE_DOCS = os.getenv("DISABLE_DOCS", "0") == "1"
+docs_url = None
+openapi_url = None
+
 app = FastAPI(
     title="Media Transcriber (Whisper)",
     version="1.0",
@@ -112,6 +119,24 @@ app = FastAPI(
     lifespan=lifespan,
     dependencies=[Depends(require_basic_auth)],
 )
+
+if not DISABLE_DOCS:
+
+    @app.get("/openapi.json", dependencies=[Depends(require_basic_auth)], include_in_schema=False)
+    def openapi_json():
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            routes=app.routes,
+        )
+        return JSONResponse(schema)
+
+    @app.get("/docs", dependencies=[Depends(require_basic_auth)], include_in_schema=False)
+    def swagger_docs():
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title=f"{app.title} - Swagger UI",
+        )
 
 
 def _safe_unlink(p: Path) -> None:
