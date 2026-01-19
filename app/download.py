@@ -4,12 +4,13 @@ import aiohttp
 import tempfile
 
 from pathlib import Path
+from typing import Tuple
 
 
 class DownloadError(RuntimeError):
     pass
 
-async def download_to_tempfile(url: str, max_bytes: int = 250 * 1024 * 1024) -> Path:
+async def download_to_tempfile(url: str, max_bytes: int = 250 * 1024 * 1024) -> Tuple[Path, str]:
     """
     Streams a URL to disk and enforces a hard size cap.
     Returns a Path to a temp file.
@@ -20,9 +21,11 @@ async def download_to_tempfile(url: str, max_bytes: int = 250 * 1024 * 1024) -> 
 
     timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes total download time
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url, allow_redirects=True) as resp:
+        async with session.get(url, allow_redirects=True, headers={"User-Agent": "media-transcriber/1.0"}) as resp:
             if resp.status != 200:
                 raise DownloadError(f"Failed to download (HTTP {resp.status})")
+
+            content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
 
             total = 0
             with tmp_path.open("wb") as f:
@@ -34,4 +37,4 @@ async def download_to_tempfile(url: str, max_bytes: int = 250 * 1024 * 1024) -> 
                         raise DownloadError(f"File too large (>{max_bytes} bytes)")
                     f.write(chunk)
 
-    return tmp_path
+    return tmp_path, content_type

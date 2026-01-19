@@ -21,6 +21,7 @@ import secrets
 from .audio import to_wav_16k_mono, AudioError
 from .download import download_to_tempfile, DownloadError
 from .models import TranscribeRequest, TranscribeResponse, EngineResult
+from .ocr import ocr_image
 from .transcribe import transcribe_whisper, get_whisper
 
 
@@ -33,6 +34,7 @@ except Exception:
 logger = logging.getLogger("media_transcriber")
 
 WHISPER_MIN_CHARS = 20  # treat shorter output as failure
+IMAGE_MIN_CHARS = int(os.getenv("OCR_MIN_CHARS", "3"))
 
 # ---------------- API key auth ----------------
 BASIC_USER = os.getenv("BASIC_USER", "").strip()
@@ -136,6 +138,7 @@ def _safe_unlink(p: Path) -> None:
 async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
     media_path = None
     wav_path = None
+    content_type = ""
 
     t0 = time.perf_counter()
     timings_ms: dict[str, float] = {}
@@ -155,10 +158,47 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         # 1) Download (timed, once)
         t_dl = time.perf_counter()
         try:
-            media_path = await download_to_tempfile(str(req.url))
+            media_path, content_type = await download_to_tempfile(str(req.url))
         except DownloadError as e:
             raise HTTPException(status_code=400, detail=str(e))
         timings_ms["download_ms"] = (time.perf_counter() - t_dl) * 1000
+
+        mode = (req.mode or "auto").lower()
+        is_image = content_type.startswith("image/")
+
+        if mode == "image" or (mode == "auto" and is_image):
+            # ---- OCR path ----
+            t_ocr = time.perf_counter()
+            try:
+                o_text, o_meta = await run_in_threadpool(ocr_image, media_path)
+            except Exception as e:
+                logger.exception(
+                    "OCR failed",
+                    extra={"url": str(req.url), "content_type": content_type, "error": str(e)},
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Image-to-text failed (content_type={content_type or 'unknown'})."
+                )
+
+            timings_ms["ocr_ms"] = (time.perf_counter() - t_ocr) * 1000
+
+            if len((o_text or "").strip()) < IMAGE_MIN_CHARS:
+                raise HTTPException(status_code=422, detail="Image-to-text failed: too little text produced.")
+
+            timings_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+            timings_ms["unaccounted_ms"] = max(
+                0.0,
+                timings_ms["total_ms"] - timings_ms.get("download_ms", 0.0) - timings_ms.get("ocr_ms", 0.0)
+            )
+
+            return TranscribeResponse(
+                url=str(req.url),
+                language=None,
+                ocr=EngineResult(text=o_text or "", meta=o_meta),
+                whisper=None,
+                timings_ms=timings_ms,
+            )
 
         # 2) Convert
         t_cv = time.perf_counter()
