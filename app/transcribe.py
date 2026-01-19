@@ -29,7 +29,6 @@ def get_whisper(model_size: str) -> WhisperModel:
         )
 
         # Make it obvious in logs what we actually initialised.
-        # (Print is fine, or use your logger if you prefer.)
         print(f"[Whisper] Loaded model={model_size} device={device} compute_type={compute_type}")
 
     return _WHISPER_CACHE[model_size]
