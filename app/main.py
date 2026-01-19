@@ -9,8 +9,11 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.concurrency import run_in_threadpool
+from fastapi.security import APIKeyHeader
+
+import secrets
 
 from .audio import to_wav_16k_mono, AudioError
 from .download import download_to_tempfile, DownloadError
@@ -27,6 +30,24 @@ except Exception:
 logger = logging.getLogger("media_transcriber")
 
 WHISPER_MIN_CHARS = 20  # treat shorter output as failure
+
+# ---------------- API key auth ----------------
+API_KEY = os.getenv("API_KEY", "").strip()
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def require_api_key(api_key: str | None = Security(api_key_header)) -> None:
+    """
+    Simple header-based auth:
+      - Client must send: X-API-Key: <secret>
+      - Secret is read from env var API_KEY
+    """
+    # If API_KEY isn't set, fail closed (safer than accidentally running open)
+    if not API_KEY:
+        raise HTTPException(status_code=500, detail="Server misconfigured: API_KEY is not set.")
+
+    if not api_key or not secrets.compare_digest(api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="Unauthorised")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,8 +75,15 @@ async def lifespan(app: FastAPI):
 
 docs_url = None if os.getenv("DISABLE_DOCS", "0") == "1" else "/docs"
 openapi_url = None if os.getenv("DISABLE_DOCS", "0") == "1" else "/openapi.json"
-app = FastAPI(title="Media Transcriber (Whisper)", version="1.0", docs_url=docs_url, openapi_url=openapi_url,
-              lifespan=lifespan)
+app = FastAPI(
+    title="Media Transcriber (Whisper)",
+    version="1.0",
+    docs_url=docs_url,
+    openapi_url=openapi_url,
+    lifespan=lifespan,
+    dependencies=[Depends(require_api_key)],
+)
+
 
 def _safe_unlink(p: Path) -> None:
     try:
@@ -65,7 +93,7 @@ def _safe_unlink(p: Path) -> None:
         # Intentionally ignore cleanup errors (disk full / perms etc.)
         pass
 
-@app.post("/transcribe", response_model=TranscribeResponse)
+@app.post("/transcribe", response_model=TranscribeResponse, dependencies=[Depends(require_api_key)])
 async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
     media_path = None
     wav_path = None
