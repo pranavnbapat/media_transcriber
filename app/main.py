@@ -9,7 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Security
+from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
@@ -102,11 +102,12 @@ app = FastAPI(
     docs_url=docs_url,
     openapi_url=openapi_url,
     lifespan=lifespan,
+    dependencies=[Depends(require_basic_auth)],
 )
 
 if not DISABLE_DOCS:
 
-    @app.get("/openapi.json", include_in_schema=False)
+    @app.get("/openapi.json", dependencies=[Depends(require_basic_auth)], include_in_schema=False)
     def openapi_json():
         schema = get_openapi(
             title=app.title,
@@ -115,7 +116,7 @@ if not DISABLE_DOCS:
         )
         return JSONResponse(schema)
 
-    @app.get("/docs", include_in_schema=False)
+    @app.get("/docs", dependencies=[Depends(require_basic_auth)], include_in_schema=False)
     def swagger_docs():
         return get_swagger_ui_html(
             openapi_url="/openapi.json",
