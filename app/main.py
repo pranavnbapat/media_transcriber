@@ -32,7 +32,14 @@ try:
 except Exception:
     pass
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
 logger = logging.getLogger("media_transcriber")
+logger.setLevel(LOG_LEVEL)
 
 WHISPER_MIN_CHARS = 20  # treat shorter output as failure
 IMAGE_MIN_CHARS = int(os.getenv("OCR_MIN_CHARS", "3"))
