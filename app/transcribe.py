@@ -19,17 +19,36 @@ def get_whisper(model_size: str) -> WhisperModel:
     Cache Whisper models in memory so you don't reload for every request.
     """
     if model_size not in _WHISPER_CACHE:
-        device = os.getenv("WHISPER_DEVICE", "cuda").strip().lower()  # "cuda" or "cpu"
-        compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "float16").strip().lower()
+        device = os.getenv("WHISPER_DEVICE", "auto").strip().lower()  # auto|cuda|cpu
+        compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "").strip().lower()
 
-        _WHISPER_CACHE[model_size] = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type,
-        )
+        # Reasonable defaults:
+        # - CPU: int8 is typically the best speed/size trade-off
+        # - CUDA: float16 is typical
+        if device == "auto":
+            preferred = [("cuda", compute_type or "float16"), ("cpu", compute_type or "int8")]
+        elif device == "cuda":
+            preferred = [("cuda", compute_type or "float16")]
+        else:
+            preferred = [("cpu", compute_type or "int8")]
 
-        # Make it obvious in logs what we actually initialised.
-        print(f"[Whisper] Loaded model={model_size} device={device} compute_type={compute_type}")
+        last_err: Exception | None = None
+        for dev, ctype in preferred:
+            try:
+                _WHISPER_CACHE[model_size] = WhisperModel(
+                    model_size,
+                    device=dev,
+                    compute_type=ctype,
+                )
+                print(f"[Whisper] Loaded model={model_size} device={dev} compute_type={ctype}")
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                print(f"[Whisper] Failed init model={model_size} device={dev} compute_type={ctype} err={e}")
+
+        if last_err is not None:
+            raise last_err
 
     return _WHISPER_CACHE[model_size]
 

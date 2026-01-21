@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import uuid
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -139,6 +140,7 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
     media_path = None
     wav_path = None
     content_type = ""
+    request_id = uuid.uuid4().hex[:12]  # short, grep-friendly
 
     t0 = time.perf_counter()
     timings_ms: dict[str, float] = {}
@@ -160,8 +162,35 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         try:
             media_path, content_type = await download_to_tempfile(str(req.url))
         except DownloadError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            logger.warning(
+                "DownloadError",
+                extra={"request_id": request_id, "url": str(req.url), "error": str(e)},
+            )
+            raise HTTPException(status_code=400, detail=f"[stage=download request_id={request_id}] {str(e)}")
+        except Exception:
+            # This catches unexpected aiohttp/tempfile/disk issues and prints a full traceback
+            logger.exception(
+                "Unexpected download failure",
+                extra={"request_id": request_id, "url": str(req.url)},
+            )
+            raise HTTPException(status_code=502, detail=f"[stage=download request_id={request_id}] Download failed.")
+
         timings_ms["download_ms"] = (time.perf_counter() - t_dl) * 1000
+
+        try:
+            media_bytes = media_path.stat().st_size if media_path else None
+        except Exception:
+            media_bytes = None
+
+        logger.info(
+            "Download complete",
+            extra={
+                "request_id": request_id,
+                "url": str(req.url),
+                "content_type": content_type,
+                "media_bytes": media_bytes,
+            },
+        )
 
         mode = (req.mode or "auto").lower()
         is_image = content_type.startswith("image/")
@@ -174,11 +203,12 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
             except Exception as e:
                 logger.exception(
                     "OCR failed",
-                    extra={"url": str(req.url), "content_type": content_type, "error": str(e)},
+                    extra={"request_id": request_id, "url": str(req.url), "content_type": content_type,
+                           "error": str(e),},
                 )
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Image-to-text failed (content_type={content_type or 'unknown'})."
+                    detail=f"[stage=ocr request_id={request_id}] Image-to-text failed (content_type={content_type or 'unknown'})."
                 )
 
             timings_ms["ocr_ms"] = (time.perf_counter() - t_ocr) * 1000
@@ -205,10 +235,27 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         try:
             wav_path = await run_in_threadpool(to_wav_16k_mono, media_path)
         except AudioError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            logger.warning(
+                "Audio conversion failed",
+                extra={"request_id": request_id, "url": str(req.url), "error": str(e)},
+            )
+            raise HTTPException(status_code=400, detail=f"[stage=convert request_id={request_id}] {str(e)}")
+        except Exception:
+            logger.exception(
+                "Unexpected audio conversion failure",
+                extra={"request_id": request_id, "url": str(req.url)},
+            )
+            raise HTTPException(status_code=422,
+                                detail=f"[stage=convert request_id={request_id}] Audio conversion failed.")
 
         # wav_path = await run_in_threadpool(to_wav_16k_mono, media_path)
         timings_ms["convert_ms"] = (time.perf_counter() - t_cv) * 1000
+        try:
+            wav_bytes = wav_path.stat().st_size if wav_path else None
+        except Exception:
+            wav_bytes = None
+        logger.info("Convert complete", extra={"request_id": request_id, "url": str(req.url),
+                                               "wav_bytes": wav_bytes},)
 
         # 3) Whisper (timed, once)
         t_wh = time.perf_counter()
@@ -219,9 +266,13 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         except Exception as e:
             logger.exception(
                 "Whisper transcription failed",
-                extra={"url": str(req.url), "whisper_model": req.whisper_model, "error": str(e)},
+                extra={"request_id": request_id, "url": str(req.url), "whisper_model": req.whisper_model,
+                       "error": str(e),},
             )
-            raise HTTPException(status_code=422, detail="Transcription failed (Whisper error).")
+            raise HTTPException(
+                status_code=422,
+                detail=f"[stage=whisper request_id={request_id}] Transcription failed (Whisper error)."
+            )
 
         timings_ms["whisper_ms"] = (time.perf_counter() - t_wh) * 1000
         detected_lang = w_meta.get("detected_language")
@@ -249,7 +300,9 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         )
 
         total_s = time.perf_counter() - t0
-        logger.info("Transcription total time", extra={"url": str(req.url), "total_s": round(total_s, 3)})
+        logger.info("Transcription total time", extra={"request_id": request_id, "url": str(req.url),
+                                                       "total_s": round(total_s, 3)},)
+
 
         return TranscribeResponse(
             url=str(req.url),
