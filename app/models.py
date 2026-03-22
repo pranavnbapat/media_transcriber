@@ -17,9 +17,10 @@ class EngineResult(BaseModel):
     meta: Dict[str, Any] = Field(default_factory=dict)
 
 class TranscribeResponse(BaseModel):
-    url: str
+    source: Optional[str] = None
+    url: Optional[str] = None
+    filename: Optional[str] = None
     language: Optional[str]
     whisper: Optional[EngineResult] = None
     ocr: Optional[EngineResult] = None
     timings_ms: Dict[str, float] = Field(default_factory=dict)
-

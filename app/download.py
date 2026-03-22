@@ -1,17 +1,21 @@
 # app/download.py
 
 import aiohttp
-import asyncio
 import logging
+import mimetypes
 import os
 import tempfile
 
 from pathlib import Path
 from typing import Tuple
+from fastapi import UploadFile
 
 logger = logging.getLogger("media_transcriber")
 
 class DownloadError(RuntimeError):
+    pass
+
+class UploadError(RuntimeError):
     pass
 
 async def download_to_tempfile(url: str, max_bytes: int = 250 * 1024 * 1024) -> Tuple[Path, str]:
@@ -75,4 +79,49 @@ async def download_to_tempfile(url: str, max_bytes: int = 250 * 1024 * 1024) -> 
             pass
         raise
 
+
+async def upload_to_tempfile(upload: UploadFile, max_bytes: int = 250 * 1024 * 1024) -> Tuple[Path, str]:
+    max_bytes = int(os.getenv("DOWNLOAD_MAX_BYTES", str(max_bytes)))
+
+    suffix = Path(upload.filename or "").suffix[:32] or ".bin"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp_path = Path(tmp.name)
+    tmp.close()
+
+    content_type = (upload.content_type or "").split(";")[0].strip().lower()
+    if not content_type:
+        content_type = mimetypes.guess_type(upload.filename or "")[0] or "application/octet-stream"
+
+    total = 0
+
+    try:
+        with tmp_path.open("wb") as f:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise UploadError(f"File too large (>{max_bytes} bytes)")
+                f.write(chunk)
+
+        logger.info(
+            "Upload complete",
+            extra={
+                "filename": upload.filename,
+                "content_type": content_type,
+                "bytes_written": total,
+                "tmp_path": str(tmp_path),
+            },
+        )
+        return tmp_path, content_type
+    except Exception:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+        raise
+    finally:
+        await upload.close()
 
