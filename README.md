@@ -220,7 +220,7 @@ docker compose up --build
 The compose file:
 
 - builds the local image
-- mounts Hugging Face cache and Vosk model directories
+- mounts the Hugging Face cache directory
 - sets CPU and memory limits
 
 Note:

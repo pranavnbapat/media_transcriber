@@ -1,57 +1,61 @@
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.3
-aiosignal==1.4.0
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.12.1
-attrs==26.1.0
-av==17.0.0
-certifi==2026.2.25
-cffi==2.0.0
-charset-normalizer==3.4.6
-click==8.3.1
-coloredlogs==15.0.1
-ctranslate2==4.7.1
-fastapi==0.135.1
+# App-level dependencies used directly by this repo.
+aiohttp==3.13.5
+fastapi==0.136.1
 faster-whisper==1.2.1
-filelock==3.25.2
-flatbuffers==25.12.19
-frozenlist==1.8.0
-fsspec==2026.2.0
-h11==0.16.0
-hf-xet==1.4.2
-httpcore==1.0.9
-httpx==0.28.1
-huggingface_hub==0.36.0
-humanfriendly==10.0
-idna==3.11
-mpmath==1.3.0
-multidict==6.7.1
-numpy==2.2.6
-onnxruntime==1.24.4
-packaging==26.0
-pillow==12.1.1
-propcache==0.4.1
-protobuf==7.34.1
-pycparser==3.0
-pydantic==2.12.5
-pydantic_core==2.41.5
+numpy==2.4.4
+pillow==12.2.0
+pydantic==2.13.3
 pytesseract==0.3.13
 python-dotenv==1.2.2
-python-multipart==0.0.22
-PyYAML==6.0.3
-requests==2.32.5
-setuptools==82.0.1
-shellingham==1.5.4
-srt==3.5.3
-sympy==1.14.0
-tokenizers==0.22.2
-tqdm==4.67.3
-typer-slim==0.24.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-urllib3==2.6.3
-uvicorn==0.42.0
-vosk==0.3.45
-websockets==16.0
-yarl==1.23.0
+python-multipart==0.0.27
+uvicorn==0.46.0
+
+# Commented out as not directly required by the app code.
+# Keep these here only as historical/reference pins.
+#
+# aiohappyeyeballs==2.6.1
+# aiosignal==1.4.0
+# annotated-doc==0.0.4
+# annotated-types==0.7.0
+# anyio==4.13.0
+# attrs==26.1.0
+# av==17.0.1
+# certifi==2026.4.22
+# cffi==2.0.0
+# charset-normalizer==3.4.7
+# click==8.3.3
+# coloredlogs==15.0.1
+# ctranslate2==4.7.1
+# filelock==3.29.0
+# flatbuffers==25.12.19
+# frozenlist==1.8.0
+# fsspec==2026.4.0
+# h11==0.16.0
+# hf-xet==1.4.2
+# httpcore==1.0.9
+# httpx==0.28.1
+# huggingface_hub==0.36.0
+# humanfriendly==10.0
+# idna==3.13
+# mpmath==1.3.0
+# multidict==6.7.1
+# onnxruntime==1.24.4
+# packaging==26.0
+# propcache==0.4.1
+# protobuf==7.34.1
+# pycparser==3.0
+# pydantic_core==2.41.5
+# PyYAML==6.0.3
+# requests==2.32.5
+# setuptools==82.0.1
+# shellingham==1.5.4
+# srt==3.5.3
+# sympy==1.14.0
+# tokenizers==0.22.2
+# tqdm==4.67.3
+# typer-slim==0.24.0
+# typing-inspection==0.4.2
+# typing_extensions==4.15.0
+# urllib3==2.6.3
+# websockets==16.0
+# yarl==1.23.0

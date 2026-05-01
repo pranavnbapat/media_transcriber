@@ -108,7 +108,7 @@ async def upload_to_tempfile(upload: UploadFile, max_bytes: int = 250 * 1024 * 1
         logger.info(
             "Upload complete",
             extra={
-                "filename": upload.filename,
+                "uploaded_filename": upload.filename,
                 "content_type": content_type,
                 "bytes_written": total,
                 "tmp_path": str(tmp_path),
@@ -124,4 +124,3 @@ async def upload_to_tempfile(upload: UploadFile, max_bytes: int = 250 * 1024 * 1
         raise
     finally:
         await upload.close()
-

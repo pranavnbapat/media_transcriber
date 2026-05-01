@@ -7,7 +7,6 @@ services:
     container_name: media_transcriber
     restart: unless-stopped
     environment:
-      - VOSK_MODELS_DIR=/models/vosk
       - WHISPER_WARM=1
       - WHISPER_WARM_MODEL=large-v1
       - HF_HOME=/cache/huggingface
@@ -19,7 +18,6 @@ services:
       - NUMEXPR_NUM_THREADS=4
       - WHISPER_ALLOWED_MODELS=large-v1,medium,small
     volumes:
-      - ./data/vosk_models:/models/vosk:ro
       - ./cache/huggingface:/cache/huggingface
 #    networks:
 #      - traefik-net

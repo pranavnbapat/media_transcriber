@@ -404,6 +404,7 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
     except Exception:
         logger.exception("Unexpected download failure", extra={"url": str(req.url)})
         raise HTTPException(status_code=502, detail="[stage=download] Download failed.")
+    download_ms = (time.perf_counter() - t_dl) * 1000
 
     resp = await _transcribe_media(
         media_path=media_path,
@@ -413,7 +414,6 @@ async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         whisper_model=req.whisper_model,
         mode=req.mode or "auto",
     )
-    download_ms = (time.perf_counter() - t_dl) * 1000
     resp.timings_ms["download_ms"] = download_ms
     resp.timings_ms["total_ms"] = resp.timings_ms.get("total_ms", 0.0) + download_ms
     resp.timings_ms["unaccounted_ms"] = max(
@@ -442,11 +442,12 @@ async def transcribe_upload(
     try:
         media_path, content_type = await upload_to_tempfile(file)
     except UploadError as e:
-        logger.warning("UploadError", extra={"filename": file.filename, "error": str(e)})
+        logger.warning("UploadError", extra={"uploaded_filename": file.filename, "error": str(e)})
         raise HTTPException(status_code=400, detail=f"[stage=upload] {str(e)}")
     except Exception:
-        logger.exception("Unexpected upload failure", extra={"filename": file.filename})
+        logger.exception("Unexpected upload failure", extra={"uploaded_filename": file.filename})
         raise HTTPException(status_code=502, detail="[stage=upload] Upload failed.")
+    upload_ms = (time.perf_counter() - t_up) * 1000
 
     resp = await _transcribe_media(
         media_path=media_path,
@@ -456,7 +457,6 @@ async def transcribe_upload(
         whisper_model=whisper_model,
         mode=mode,
     )
-    upload_ms = (time.perf_counter() - t_up) * 1000
     resp.timings_ms["upload_ms"] = upload_ms
     resp.timings_ms["total_ms"] = resp.timings_ms.get("total_ms", 0.0) + upload_ms
     resp.timings_ms["unaccounted_ms"] = max(
