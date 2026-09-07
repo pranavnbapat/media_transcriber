@@ -24,7 +24,7 @@ from .audio import to_wav_16k_mono, probe_media, AudioError, MediaProbeError
 from .download import download_to_tempfile, upload_to_tempfile, DownloadError, UploadError
 from .models import TranscribeRequest, TranscribeResponse, EngineResult
 from .ocr import ocr_image
-from .transcribe import transcribe_whisper, get_whisper
+from .transcribe import transcribe_whisper, get_whisper, remote_transcription_enabled
 
 
 try:
@@ -42,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger("media_transcriber")
 logger.setLevel(LOG_LEVEL)
 
-WHISPER_MIN_CHARS = 20  # treat shorter output as failure
+WHISPER_MIN_CHARS = int(os.getenv("WHISPER_MIN_CHARS", "1"))
 IMAGE_MIN_CHARS = int(os.getenv("OCR_MIN_CHARS", "3"))
 MAX_VIDEO_DURATION_SEC = float(os.getenv("MAX_VIDEO_DURATION_SEC", "3600"))
 
@@ -88,7 +88,13 @@ async def lifespan(app: FastAPI):
       - WHISPER_WARM=1|0
       - WHISPER_WARM_MODEL=medium|large-v1|...
     """
-    if os.getenv("WHISPER_WARM", "1") == "1":
+    # Nothing to warm when transcription goes to a hosted endpoint: loading a
+    # local model would download gigabytes and consume memory that is never
+    # used. Checked here rather than by unsetting WHISPER_WARM, so the remote
+    # configuration is the only switch anyone has to remember.
+    if remote_transcription_enabled():
+        logger.info("Transcription is remote; skipping local Whisper warm-up")
+    elif os.getenv("WHISPER_WARM", "1") == "1":
         model_name = os.getenv("WHISPER_WARM_MODEL", "medium")
         logger.info("Warming Whisper model: %s", model_name)
 
